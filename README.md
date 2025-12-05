@@ -1,1 +1,90 @@
+--[[
+	WARNING: Heads up! This script has not been verified by ScriptBlox. Use at your own risk!
+]]
+if not writefile or not makefolder then return end
 
+local PlaceId = game.PlaceId
+local GameName = PlaceId
+pcall(function()
+    local info = game:GetService("MarketplaceService"):GetProductInfo(PlaceId)
+    GameName = (info.Name or PlaceId):gsub("[%/%\\%:%*%%%?%<>%|]","_").."_"..PlaceId
+end)
+
+if isfolder and isfolder(GameName) and delfolder then delfolder(GameName) end
+makefolder(GameName)
+makefolder(GameName.."/Scripts")
+
+local total = 0
+local code = ""
+
+local function a(s) code = code .. s end
+
+local function dump(obj,parent)
+    total += 1
+    local v = "i"..total
+    local n = obj.Name:gsub('"','\\"'):gsub("[\n\r]"," ")
+
+    a('local '..v..'=Instance.new("'..obj.ClassName..'")\n')
+    a(v..'.Name="'..n..'"\n')
+
+    local props = {
+        "Size","Position","AnchorPoint","BackgroundColor3","BackgroundTransparency",
+        "BorderSizePixel","Text","TextColor3","TextSize","Font","TextXAlignment","TextYAlignment",
+        "Visible","Transparency","CFrame","Orientation","Rotation","Color","Material",
+        "CanCollide","Locked","ZIndex","Image","ImageColor3","ImageTransparency","CornerRadius"
+    }
+
+    for _,p in ipairs(props) do
+        local ok,val = pcall(function() return obj[p] end)
+        if ok and val ~= nil then
+            local t = typeof(val)
+            if t=="string" and val~="" then
+                a(v..'.'..p..'="'..val:gsub('"','\\"'):gsub("\n","\\n")..'"\n')
+            elseif t=="number" or t=="boolean" then
+                a(v..'.'..p.."="..tostring(val).."\n")
+            elseif t=="Vector3" then
+                a(v..'.'..p..'=Vector3.new('..string.format("%.4f,%.4f,%.4f",val.X,val.Y,val.Z)..')\n')
+            elseif t=="UDim2" then
+                a(v..'.'..p..'=UDim2.new('..string.format("%.4f,%d,%.4f,%d",val.X.Scale,val.X.Offset,val.Y.Scale,val.Y.Offset)..')\n')
+            elseif t=="Color3" then
+                a(v..'.'..p..'=Color3.new('..string.format("%.4f,%.4f,%.4f",val.R,val.G,val.B)..')\n')
+            elseif t=="CFrame" then
+                a(v..'.'..p..'=CFrame.new('..string.format("%.4f,%.4f,%.4f",val.Position.X,val.Position.Y,val.Position.Z)..')\n')
+            end
+        end
+    end
+
+    if obj:IsA("LocalScript") or obj:IsA("Script") or obj:IsA("ModuleScript") then
+        local src = ""
+        if decompile then
+            local ok,s = pcall(decompile,obj)
+            if ok then src = s end
+        end
+        a(v..".Source=[["..src.."]]\n")
+        writefile(GameName.."/Scripts/"..obj:GetFullName():gsub("[^%w_]","_")..".lua",src)
+    end
+
+    if parent then a(v..".Parent="..parent.."\n\n") end
+
+    for _,c in ipairs(obj:GetChildren()) do
+        dump(c,v)
+    end
+end
+
+local services = {
+    game.Workspace,
+    game.StarterGui,
+    game.ReplicatedStorage,
+    game.Lighting,
+    game.StarterPack,
+    game.SoundService,
+    game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui",10),
+    game:GetService("Players").LocalPlayer:WaitForChild("Backpack",10)
+}
+
+for _,s in ipairs(services) do
+    if s then dump(s, s.Parent == game and "game" or nil) end
+end
+
+writefile(GameName.."/dump.lua",code)
+print(GameName..".lua has been saved!")
